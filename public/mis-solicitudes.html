@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/assets/logo.png" />
+  <title>CTF – Solicitudes</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside id="sidebar" class="sidebar"></aside>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <div class="main-content">
+    <header class="top-bar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+        <h2 id="page-title">Solicitudes</h2>
+      </div>
+      <div class="top-bar-actions">
+        <select id="filter-estado" class="form-select" style="width:auto; padding:7px 12px; font-size:.85rem;" onchange="loadSolicitudes(1)">
+          <option value="">Todos</option>
+          <option value="PENDIENTE">Pendiente</option>
+          <option value="EN_PROCESO">En Proceso</option>
+          <option value="RECIBIDO">Recibido</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="loadSolicitudes(1)">🔄</button>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="card">
+        <div id="list-container">
+          <div class="empty-state">
+            <div class="spinner" style="border-color:var(--gray-300); border-top-color:var(--purple-600); width:28px; height:28px; margin:0 auto 12px;"></div>
+            <p>Cargando solicitudes...</p>
+          </div>
+        </div>
+        <div id="pagination" class="pagination"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div id="detail-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <h3>Detalle de Solicitud</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-content">Cargando...</div>
+  </div>
+</div>
+
+<script src="/js/utils.js"></script>
+<script>
+  const user = CTF.requireAuth();
+  if (!user) throw new Error();
+
+  renderSidebar('/mis-solicitudes.html');
+  initMobileSidebar();
+
+  document.getElementById('page-title').textContent =
+    user.rol === 'TESORERIA' || user.rol === 'CONTADOR_OFC'
+      ? 'Todas las Solicitudes' : 'Mis Solicitudes';
+
+  let currentPage = 1;
+  const PAGE_SIZE = 15;
+
+  const params = new URLSearchParams(window.location.search);
+  const openId = params.get('id');
+
+  // Badge helper
+  const estadoLabel = { PENDIENTE: 'Pendiente', EN_PROCESO: 'En Proceso', RECIBIDO: 'Recibido' };
+  function badgeHtml(estado) {
+    return `<span class="badge badge-${estado.toLowerCase()}"><span class="badge-dot"></span>${estadoLabel[estado] || estado}</span>`;
+  }
+
+  async function loadSolicitudes(page = 1) {
+    currentPage = page;
+    const estado = document.getElementById('filter-estado').value;
+    const container = document.getElementById('list-container');
+    container.innerHTML = `<div class="empty-state"><div class="spinner" style="border-color:var(--gray-300); border-top-color:var(--purple-600); width:28px; height:28px; margin:0 auto 12px;"></div><p>Cargando...</p></div>`;
+
+    try {
+      const qs = new URLSearchParams({ page, limit: PAGE_SIZE, ...(estado ? { estado } : {}) });
+      const data = await CTF.get(`/solicitudes?${qs}`);
+
+      if (!data.solicitudes || data.solicitudes.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <p>No hay solicitudes ${estado ? `con estado "${estado}"` : 'todavía'}.</p>
+            ${user.rol === 'CONTADOR' ? '<a href="/nueva-solicitud.html" class="btn btn-primary btn-sm" style="margin-top:12px;">Crear primera solicitud</a>' : ''}
+          </div>`;
+        document.getElementById('pagination').innerHTML = '';
+        return;
+      }
+
+      const showSender = user.rol === 'TESORERIA' || user.rol === 'CONTADOR_OFC';
+
+      container.innerHTML = `
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                ${showSender ? '<th>Enviado por</th>' : ''}
+                <th>Docs</th>
+                <th>Estado</th>
+                <th>Fecha Envío</th>
+                <th>En Proceso</th>
+                <th>Recibido</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.solicitudes.map(s => `
+                <tr>
+                  <td><code style="font-size:.78rem; background:var(--purple-50); padding:3px 8px; border-radius:4px; color:var(--purple-700);">${CTF.shortId(s.id_unico)}</code></td>
+                  ${showSender ? `<td>${s.usuario_nombre || '—'}</td>` : ''}
+                  <td><span class="badge" style="background:var(--purple-100);color:var(--purple-700);">${s.documentos.length}</span></td>
+                  <td>${badgeHtml(s.estado)}</td>
+                  <td class="text-xs" style="color:var(--gray-500);">${CTF.formatDate(s.fecha_creacion)}</td>
+                  <td class="text-xs" style="color:var(--orange-600);">${CTF.formatDate(s.fecha_en_proceso)}</td>
+                  <td class="text-xs" style="color:var(--green-600);">${CTF.formatDate(s.fecha_recepcion)}</td>
+                  <td>
+                    <div style="display:flex; gap:6px;">
+                      <button class="btn btn-outline btn-sm" onclick="openDetail('${s.id_unico}')">Ver</button>
+                      <button class="btn btn-primary btn-sm" onclick="downloadPDF('${s.id_unico}', this)">PDF</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
+      renderPagination(data.total, page, PAGE_SIZE);
+    } catch (err) {
+      container.innerHTML = `<div class="alert alert-error">Error al cargar solicitudes: ${err.message}</div>`;
+    }
+  }
+
+  function renderPagination(total, current, pageSize) {
+    const totalPages = Math.ceil(total / pageSize);
+    if (totalPages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
+      .map(i => `<button class="page-btn ${i === current ? 'active' : ''}" onclick="loadSolicitudes(${i})">${i}</button>`)
+      .join('');
+    document.getElementById('pagination').innerHTML =
+      `<button class="page-btn" onclick="loadSolicitudes(${current - 1})" ${current === 1 ? 'disabled' : ''}>‹</button>
+       ${pages}
+       <button class="page-btn" onclick="loadSolicitudes(${current + 1})" ${current === totalPages ? 'disabled' : ''}>›</button>`;
+  }
+
+  async function openDetail(id) {
+    document.getElementById('detail-modal').classList.remove('hidden');
+    document.getElementById('modal-content').innerHTML = `<div class="empty-state" style="padding:32px 0;"><div class="spinner" style="border-color:var(--gray-300); border-top-color:var(--purple-600); width:28px; height:28px; margin:0 auto 12px;"></div><p>Cargando...</p></div>`;
+
+    try {
+      const [detailData, logsData] = await Promise.all([
+        CTF.get(`/solicitudes/${id}`),
+        CTF.get(`/solicitudes/${id}/logs`),
+      ]);
+
+      const s = detailData.solicitud;
+      const logs = logsData.logs || [];
+
+      // Timeline de logs
+      const logColors = { CREADO: '#6B7280', EN_PROCESO: '#F97316', RECIBIDO: '#059669' };
+      const logIcons  = { CREADO: '📝', EN_PROCESO: '🔄', RECIBIDO: '✅' };
+      const logsHtml = logs.length > 0
+        ? logs.map(l => `
+          <div style="display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--gray-100);">
+            <div style="width:10px; height:10px; border-radius:50%; margin-top:5px; flex-shrink:0; background:${logColors[l.accion] || '#6B7280'};"></div>
+            <div>
+              <div style="font-size:.85rem; font-weight:600;">${logIcons[l.accion] || '•'} ${
+                l.accion === 'CREADO'     ? 'Solicitud creada' :
+                l.accion === 'EN_PROCESO' ? 'Recibido en oficina' :
+                l.accion === 'RECIBIDO'   ? 'Recibido en Tesorería' : l.accion
+              }</div>
+              <div style="font-size:.78rem; color:var(--gray-500);">${l.usuario_nombre} · ${CTF.rolLabel(l.usuario_rol)}</div>
+              <div style="font-size:.78rem; color:var(--gray-500);">${CTF.formatDate(l.fecha)}</div>
+            </div>
+          </div>`)
+          .join('')
+        : '<p class="text-sm" style="color:var(--gray-500);">Sin historial registrado.</p>';
+
+      document.getElementById('modal-content').innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          ${badgeHtml(s.estado)}
+          <code style="font-size:.72rem; color:var(--gray-400);">${s.id_unico}</code>
+        </div>
+
+        <!-- Info grid -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+          <div class="card" style="padding:12px; border-radius:8px;">
+            <div class="text-xs" style="color:var(--gray-500); text-transform:uppercase; letter-spacing:.5px;">Enviado por</div>
+            <div style="font-weight:600; margin-top:4px; font-size:.9rem;">${s.usuario_nombre || '—'}</div>
+          </div>
+          <div class="card" style="padding:12px; border-radius:8px;">
+            <div class="text-xs" style="color:var(--gray-500); text-transform:uppercase; letter-spacing:.5px;">Fecha envío</div>
+            <div style="font-weight:600; margin-top:4px; font-size:.82rem;">${CTF.formatDate(s.fecha_creacion)}</div>
+          </div>
+          ${s.fecha_en_proceso ? `
+          <div class="card" style="padding:12px; border-radius:8px; background:var(--orange-100); border-color:#FCD34D; grid-column:span 2;">
+            <div class="text-xs" style="color:var(--orange-600); text-transform:uppercase; letter-spacing:.5px;">🔄 En proceso desde</div>
+            <div style="font-weight:600; margin-top:4px; color:var(--orange-600); font-size:.82rem;">${CTF.formatDate(s.fecha_en_proceso)}</div>
+          </div>` : ''}
+          ${s.fecha_recepcion ? `
+          <div class="card" style="padding:12px; border-radius:8px; background:var(--green-100); border-color:#6EE7B7; grid-column:span 2;">
+            <div class="text-xs" style="color:var(--green-600); text-transform:uppercase; letter-spacing:.5px;">✓ Recibido en Tesorería</div>
+            <div style="font-weight:600; margin-top:4px; color:var(--green-600); font-size:.82rem;">${CTF.formatDate(s.fecha_recepcion)}</div>
+          </div>` : ''}
+        </div>
+
+        <!-- Documentos -->
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:600; margin-bottom:8px; color:var(--gray-700);">📄 Documentos (${s.documentos.length})</div>
+          <div style="background:var(--gray-50); border-radius:8px; padding:12px; max-height:180px; overflow-y:auto;">
+            ${s.documentos.map((d, i) => `
+              <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--gray-100);">
+                <span style="background:var(--purple-700); color:white; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.7rem; font-weight:700; flex-shrink:0;">${i+1}</span>
+                <code style="font-size:.9rem;">${d}</code>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- QR -->
+        <div class="qr-container">
+          <img src="${detailData.qrDataUrl}" alt="QR" style="width:150px; height:150px;" />
+          <div class="qr-link">${detailData.linkCompleto}</div>
+        </div>
+
+        <!-- Historial de logs -->
+        <div style="margin-top:20px;">
+          <div style="font-weight:600; margin-bottom:10px; color:var(--gray-700);">📋 Historial</div>
+          <div style="background:var(--gray-50); border-radius:8px; padding:12px;">
+            ${logsHtml}
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
+          ${s.estado === 'PENDIENTE' && user.rol === 'TESORERIA' ? `
+            <button class="btn btn-orange" style="flex:1;" onclick="accionRecibir('${s.id_unico}', this)">✓ Marcar como Recibido</button>` : ''}
+          ${s.estado === 'PENDIENTE' && user.rol === 'CONTADOR_OFC' ? `
+            <button class="btn btn-orange" style="flex:1;" onclick="accionRecibir('${s.id_unico}', this)">🔄 Marcar En Proceso</button>` : ''}
+          ${s.estado === 'EN_PROCESO' && user.rol === 'TESORERIA' ? `
+            <button class="btn btn-primary" style="flex:1;" onclick="accionRecibir('${s.id_unico}', this)">✓ Marcar como Recibido</button>` : ''}
+          <button class="btn btn-outline" style="flex:1;" onclick="downloadPDF('${s.id_unico}', this)">📄 PDF</button>
+        </div>`;
+
+    } catch (err) {
+      document.getElementById('modal-content').innerHTML = `<div class="alert alert-error">${err.message}</div>`;
+    }
+  }
+
+  function closeModal() {
+    document.getElementById('detail-modal').classList.add('hidden');
+  }
+
+  async function accionRecibir(id, btn) {
+    CTF.setButtonLoading(btn, true, 'Registrando...');
+    try {
+      const data = await CTF.put(`/solicitudes/${id}/recibir`);
+      CTF.showToast(data.message, 'success');
+      closeModal();
+      loadSolicitudes(currentPage);
+    } catch (err) {
+      CTF.showToast('Error: ' + err.message, 'error');
+    } finally {
+      CTF.setButtonLoading(btn, false);
+    }
+  }
+
+  async function downloadPDF(id, btn) {
+    CTF.setButtonLoading(btn, true, '...');
+    try {
+      const token = CTF.getToken();
+      const res = await fetch(`/api/solicitudes/${id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }, credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Error al generar PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `CTF-${CTF.shortId(id)}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+      CTF.showToast('PDF descargado', 'success');
+    } catch (err) {
+      CTF.showToast('Error al descargar PDF', 'error');
+    } finally {
+      CTF.setButtonLoading(btn, false, 'PDF');
+    }
+  }
+
+  document.getElementById('detail-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'detail-modal') closeModal();
+  });
+
+  loadSolicitudes(1);
+  if (openId) setTimeout(() => openDetail(openId), 600);
+</script>
+</body>
+</html>

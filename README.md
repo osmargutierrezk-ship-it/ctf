@@ -318,5 +318,3 @@ En caso de fallo de conexión:
 [DB] Error conectando a la base de datos (intento 1/5): ...
 [DB] Reintentando en 3 segundos...
 ```
-#   c t f  
- 
