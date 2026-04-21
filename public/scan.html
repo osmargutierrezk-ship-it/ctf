@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CTF – Confirmar Recepción</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    .scan-success { border-top: 4px solid var(--green-600); }
+    .scan-denied  { border-top: 4px solid var(--red-600); }
+    .scan-pending { border-top: 4px solid var(--orange-500); }
+    .scan-already { border-top: 4px solid var(--purple-600); }
+  </style>
+</head>
+<body>
+  <div class="scan-page">
+    <div id="scan-card" class="scan-card">
+      <!-- Loading state -->
+      <div id="state-loading">
+        <div class="scan-icon">⏳</div>
+        <div class="scan-title">Verificando solicitud...</div>
+        <div class="spinner" style="margin: 12px auto; border-color:var(--gray-300); border-top-color:var(--purple-700); width:32px; height:32px;"></div>
+      </div>
+
+      <!-- Not logged in -->
+      <div id="state-noauth" class="hidden">
+        <div class="scan-icon">🔐</div>
+        <div class="scan-title">Inicia sesión para continuar</div>
+        <p style="margin-bottom:20px;">Debes estar autenticado para confirmar la recepción de documentos.</p>
+        <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="redirectToLogin()">
+          Iniciar Sesión
+        </button>
+      </div>
+
+      <!-- Success: Marked as received -->
+      <div id="state-success" class="hidden">
+        <div class="scan-icon">✅</div>
+        <div class="scan-title" style="color:var(--green-600);">Registrado correctamente</div>
+        <p>Los documentos han sido marcados como recibidos por Tesorería.</p>
+        <div id="success-details" style="margin:20px 0; background:var(--green-100); border-radius:10px; padding:16px; text-align:left;">
+        </div>
+        <a href="/dashboard.html" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:8px;">
+          Ir al Dashboard
+        </a>
+      </div>
+
+      <!-- Already received -->
+      <div id="state-already" class="hidden">
+        <div class="scan-icon">ℹ️</div>
+        <div class="scan-title" style="color:var(--purple-700);">Ya fue registrada</div>
+        <p>Esta solicitud ya fue marcada como recibida anteriormente.</p>
+        <div id="already-details" style="margin:20px 0; background:var(--purple-50); border-radius:10px; padding:16px; text-align:left;"></div>
+        <a href="/dashboard.html" class="btn btn-outline" style="width:100%; justify-content:center; margin-top:8px;">
+          Ir al Dashboard
+        </a>
+      </div>
+
+      <!-- Access denied (CONTADOR) -->
+      <div id="state-denied" class="hidden">
+        <div class="scan-icon">⛔</div>
+        <div class="scan-title" style="color:var(--red-600);">No tienes acceso</div>
+        <p>Solo el personal de <strong>Tesorería</strong> puede confirmar la recepción de documentos escaneando el QR.</p>
+        <div style="background:var(--red-100); border-radius:10px; padding:16px; margin:20px 0; text-align:left;">
+          <p class="text-sm" style="color:var(--red-600);">Tu rol actual es: <strong>CONTADOR</strong></p>
+          <p class="text-sm" style="color:var(--red-600); margin-top:4px;">Este QR debe ser escaneado por Tesorería.</p>
+        </div>
+        <a href="/dashboard.html" class="btn btn-outline" style="width:100%; justify-content:center;">
+          Ir al Dashboard
+        </a>
+      </div>
+
+      <!-- Error -->
+      <div id="state-error" class="hidden">
+        <div class="scan-icon">❌</div>
+        <div class="scan-title">Solicitud no encontrada</div>
+        <p id="error-msg">El código QR no corresponde a ninguna solicitud activa.</p>
+        <a href="/dashboard.html" class="btn btn-outline" style="width:100%; justify-content:center; margin-top:16px;">
+          Ir al Dashboard
+        </a>
+      </div>
+
+      <div style="margin-top:24px; padding-top:16px; border-top:1px solid var(--gray-100);">
+        <p class="text-xs" style="color:var(--gray-500);">Sistema CTF — Control de Traslado de Facturas</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    const solicitudId = window.location.pathname.split('/').pop();
+
+    function showState(name, cardClass = '') {
+      ['loading', 'noauth', 'success', 'already', 'denied', 'error'].forEach(s => {
+        document.getElementById(`state-${s}`).classList.add('hidden');
+      });
+      document.getElementById(`state-${name}`).classList.remove('hidden');
+      const card = document.getElementById('scan-card');
+      card.className = 'scan-card';
+      if (cardClass) card.classList.add(cardClass);
+    }
+
+    function redirectToLogin() {
+      const returnTo = encodeURIComponent(window.location.pathname);
+      window.location.href = `/login.html?returnTo=${returnTo}`;
+    }
+
+    async function processScan() {
+      if (!solicitudId || solicitudId.length < 10) {
+        showState('error', 'scan-pending');
+        return;
+      }
+
+      const token = CTF.getToken();
+      const user = CTF.getUser();
+
+      // Not logged in
+      if (!token || !user) {
+        showState('noauth');
+        return;
+      }
+
+      // CONTADOR - no access
+      if (user.rol === 'CONTADOR') {
+        showState('denied', 'scan-denied');
+        console.log(`[QR-SCAN] Acceso denegado: ${user.username} (CONTADOR) intentó escanear solicitud ${solicitudId}`);
+        return;
+      }
+
+      // TESORERIA - process
+      try {
+        const data = await CTF.put(`/solicitudes/${solicitudId}/recibir`);
+
+        if (data.alreadyReceived) {
+          const s = data.solicitud;
+          document.getElementById('already-details').innerHTML = `
+            <p class="text-sm" style="color:var(--purple-700); font-weight:600;">Solicitud: ${CTF.shortId(solicitudId)}</p>
+            <p class="text-sm" style="margin-top:4px; color:var(--gray-500);">Ya fue recibida anteriormente.</p>
+          `;
+          showState('already', 'scan-already');
+          return;
+        }
+
+        const s = data.solicitud;
+        const docs = Array.isArray(s.documentos) ? s.documentos : JSON.parse(s.documentos);
+        document.getElementById('success-details').innerHTML = `
+          <p class="text-sm" style="color:var(--green-600); font-weight:700; margin-bottom:8px;">✓ Solicitud: ${CTF.shortId(solicitudId)}</p>
+          <p class="text-sm" style="color:var(--gray-600);">Enviado por: <strong>${s.usuario_nombre}</strong></p>
+          <p class="text-sm" style="color:var(--gray-600); margin-top:4px;">Documentos recibidos: <strong>${docs.length}</strong></p>
+          <p class="text-sm" style="color:var(--gray-600); margin-top:4px;">Hora de recepción: <strong>${CTF.formatDate(s.fecha_recepcion)}</strong></p>
+          <div style="margin-top:10px; border-top:1px solid #6EE7B7; padding-top:10px;">
+            ${docs.map((d,i) => `<div class="text-xs" style="color:var(--gray-600); padding:2px 0;">${String(i+1).padStart(2,'0')}. ${d}</div>`).join('')}
+          </div>
+        `;
+        showState('success', 'scan-success');
+        console.log(`[QR-SCAN] Solicitud ${solicitudId} marcada como RECIBIDA por ${user.username}`);
+      } catch (err) {
+        if (err.message.includes('no encontrada')) {
+          document.getElementById('error-msg').textContent = 'El código QR no corresponde a ninguna solicitud registrada.';
+        } else {
+          document.getElementById('error-msg').textContent = err.message;
+        }
+        showState('error');
+      }
+    }
+
+    processScan();
+  </script>
+</body>
+</html>

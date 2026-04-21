@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CTF – Iniciar Sesión</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css" />
+  <style>
+    .login-form-toggle { text-align: center; margin-top: 12px; font-size: .85rem; }
+    .link-btn { background: none; border: none; color: var(--purple-600); cursor: pointer; font-weight: 600; }
+    .link-btn:hover { text-decoration: underline; }
+    .section { display: none; }
+    .section.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="login-bg">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="login-logo-badge">CTF</div>
+        <h1>Control de Traslado de Facturas</h1>
+        <p>Sistema de gestión de documentos</p>
+      </div>
+
+      <!-- SECTION: Login -->
+      <div id="section-login" class="section active">
+        <div id="login-alert" class="alert hidden"></div>
+        <div class="form-group">
+          <label class="form-label" for="username">Usuario</label>
+          <input id="username" type="text" class="form-input" placeholder="Ingresa tu usuario" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Contraseña</label>
+          <input id="password" type="password" class="form-input" placeholder="Ingresa tu contraseña" autocomplete="current-password" />
+        </div>
+        <button id="btn-login" class="btn btn-primary" style="width:100%; justify-content:center; padding:13px;" onclick="doLogin()">
+          Iniciar Sesión
+        </button>
+        <div class="login-form-toggle">
+          ¿Primera vez? <button class="link-btn" onclick="showSection('setup')">Configura tu contraseña</button>
+        </div>
+      </div>
+
+      <!-- SECTION: Setup Password (First Login) -->
+      <div id="section-setup" class="section">
+        <div style="text-align:center; margin-bottom:20px;">
+          <div style="font-size:1.8rem; margin-bottom:8px;">🔐</div>
+          <h2 style="font-size:1.2rem;">Crear Contraseña</h2>
+          <p class="text-sm mt-4">Es tu primer acceso. Crea una contraseña segura para continuar.</p>
+        </div>
+        <div id="setup-alert" class="alert hidden"></div>
+        <div class="form-group">
+          <label class="form-label" for="setup-username">Usuario</label>
+          <input id="setup-username" type="text" class="form-input" placeholder="Tu usuario" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="setup-password">Nueva Contraseña</label>
+          <input id="setup-password" type="password" class="form-input" placeholder="Mínimo 8 caracteres con letras y números" oninput="updateStrength(this.value)" />
+          <div class="strength-bar"><div id="strength-fill" class="strength-fill" style="width:0%"></div></div>
+          <div id="strength-text" class="form-hint"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="setup-confirm">Confirmar Contraseña</label>
+          <input id="setup-confirm" type="password" class="form-input" placeholder="Repite la contraseña" />
+        </div>
+        <button id="btn-setup" class="btn btn-orange" style="width:100%; justify-content:center; padding:13px;" onclick="doSetupPassword()">
+          Guardar Contraseña
+        </button>
+        <div class="login-form-toggle">
+          <button class="link-btn" onclick="showSection('login')">← Volver al Login</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/utils.js"></script>
+  <script>
+    // Redirect if already logged in
+    if (CTF.isLoggedIn()) {
+      window.location.href = '/dashboard.html';
+    }
+
+    // Check for returnTo param to use after login
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get('returnTo');
+
+    function showSection(name) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.getElementById(`section-${name}`).classList.add('active');
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const active = document.querySelector('.section.active');
+        if (active.id === 'section-login') doLogin();
+        else doSetupPassword();
+      }
+    });
+
+    async function doLogin() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('btn-login');
+
+      if (!username || !password) {
+        CTF.showAlert('login-alert', 'Ingresa tu usuario y contraseña.', 'error');
+        return;
+      }
+
+      CTF.setButtonLoading(btn, true, 'Ingresando...');
+      CTF.hideAlert('login-alert');
+
+      try {
+        const data = await CTF.api('POST', '/auth/login', { username, password });
+
+        if (data.requiresPasswordSetup) {
+          // User has no password yet — switch to setup form
+          document.getElementById('setup-username').value = username;
+          CTF.showAlert('setup-alert', 'Debes crear una contraseña antes de continuar.', 'info');
+          showSection('setup');
+          return;
+        }
+
+        CTF.setSession(data.token, data.user);
+
+        if (data.requiresPasswordChange) {
+          window.location.href = '/cambiar-password.html';
+          return;
+        }
+
+        CTF.showToast(`¡Bienvenido, ${data.user.nombre}!`, 'success');
+        setTimeout(() => {
+          window.location.href = returnTo ? decodeURIComponent(returnTo) : '/dashboard.html';
+        }, 400);
+
+      } catch (err) {
+        CTF.showAlert('login-alert', err.message, 'error');
+      } finally {
+        CTF.setButtonLoading(btn, false, 'Iniciar Sesión');
+      }
+    }
+
+    async function doSetupPassword() {
+      const username   = document.getElementById('setup-username').value.trim();
+      const newPass    = document.getElementById('setup-password').value;
+      const confirmPass = document.getElementById('setup-confirm').value;
+      const btn = document.getElementById('btn-setup');
+
+      if (!username || !newPass || !confirmPass) {
+        CTF.showAlert('setup-alert', 'Todos los campos son requeridos.', 'error');
+        return;
+      }
+      if (newPass !== confirmPass) {
+        CTF.showAlert('setup-alert', 'Las contraseñas no coinciden.', 'error');
+        return;
+      }
+
+      CTF.setButtonLoading(btn, true, 'Guardando...');
+      CTF.hideAlert('setup-alert');
+
+      try {
+        const data = await CTF.api('POST', '/auth/setup-password', {
+          username, nuevaPassword: newPass, confirmarPassword: confirmPass
+        });
+        CTF.setSession(data.token, data.user);
+        CTF.showToast('¡Contraseña creada! Bienvenido.', 'success');
+        setTimeout(() => window.location.href = '/dashboard.html', 600);
+      } catch (err) {
+        CTF.showAlert('setup-alert', err.message, 'error');
+      } finally {
+        CTF.setButtonLoading(btn, false, 'Guardar Contraseña');
+      }
+    }
+
+    function updateStrength(pass) {
+      let score = 0;
+      if (pass.length >= 8) score++;
+      if (pass.length >= 12) score++;
+      if (/[A-Z]/.test(pass)) score++;
+      if (/[0-9]/.test(pass)) score++;
+      if (/[^A-Za-z0-9]/.test(pass)) score++;
+
+      const labels = ['', 'Muy débil', 'Débil', 'Aceptable', 'Fuerte', 'Muy fuerte'];
+      const colors = ['', '#DC2626', '#F97316', '#EAB308', '#22C55E', '#16A34A'];
+      const widths = ['0%', '20%', '40%', '60%', '80%', '100%'];
+
+      const fill = document.getElementById('strength-fill');
+      const text = document.getElementById('strength-text');
+      fill.style.width = widths[score];
+      fill.style.background = colors[score];
+      text.textContent = score > 0 ? `Contraseña ${labels[score]}` : '';
+      text.style.color = colors[score];
+    }
+  </script>
+</body>
+</html>
