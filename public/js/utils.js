@@ -169,6 +169,7 @@ function renderSidebar(activePage) {
     ],
     CONTADOR_OFC: [
       { href: '/dashboard.html',        icon: '📊', label: 'Dashboard' },
+      { href: '/nueva-solicitud.html',  icon: '📤', label: 'Nueva Solicitud' },
       { href: '/mis-solicitudes.html',  icon: '📋', label: 'Solicitudes' },
       { href: '/cambiar-password.html', icon: '🔒', label: 'Cambiar Contraseña' },
     ],

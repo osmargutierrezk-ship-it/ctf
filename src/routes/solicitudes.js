@@ -10,7 +10,7 @@ const auth = [verifyToken, requirePasswordSet];
 
 router.get('/stats',           auth, obtenerStats);
 router.get('/',                auth, listarSolicitudes);
-router.post('/',               auth, requireRole('CONTADOR'), crearSolicitud);
+router.post('/',               auth, requireRole('CONTADOR', 'CONTADOR_OFC'), crearSolicitud);
 router.get('/:id',             auth, obtenerSolicitud);
 router.put('/:id/recibir',     auth, requireRole('TESORERIA', 'CONTADOR_OFC'), recibirSolicitud);
 router.get('/:id/logs',        auth, obtenerLogs);

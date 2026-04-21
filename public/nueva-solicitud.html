@@ -133,7 +133,7 @@
 
 <script src="/js/utils.js"></script>
 <script>
-  const user = CTF.requireAuth(['CONTADOR']);
+  const user = CTF.requireAuth(['CONTADOR', 'CONTADOR_OFC']);
   if (!user) throw new Error('No auth');
 
   renderSidebar('/nueva-solicitud.html');
