@@ -143,7 +143,7 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
       const colWidth = (pageWidth - 20) / 2;
 
       const drawSignatureBox = (label, xPos) => {
-        doc.rect(xPos, y, colWidth, 70).stroke('#D1D5DB').lineWidth(0.5);
+        doc.rect(xPos, y, colWidth, 60).stroke('#D1D5DB').lineWidth(0.5);
         doc.moveTo(xPos + 15, y + 50).lineTo(xPos + colWidth - 15, y + 50)
           .lineWidth(0.5).stroke(PURPLE);
         doc.fontSize(7).fillColor(MED_GRAY).font('Helvetica')
@@ -154,7 +154,7 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
       drawSignatureBox('FIRMA Y SELLO - TESORERÍA', 60 + colWidth + 20);
 
       // ── FOOTER ─────────────────────────────────────────────────────────
-      const footerY = doc.page.height - 72;
+      const footerY = doc.page.height - 80;
       doc.fontSize(7).fillColor(MED_GRAY).font('Helvetica')
         .text(
           `OFI - Sistema de Control de Traslado de Facturas | Generado: ${formatDate(new Date())}`,
