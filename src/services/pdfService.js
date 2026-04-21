@@ -2,7 +2,7 @@ const PDFDocument = require('pdfkit');
 const { generateQRBuffer } = require('./qrService');
 const path = require('path');
 
-const PURPLE = '#881f8c';
+const PURPLE = '#860063';
 const ORANGE = '#F97316';
 const LIGHT_GRAY = '#F3F4F6';
 const DARK_GRAY = '#374151';
