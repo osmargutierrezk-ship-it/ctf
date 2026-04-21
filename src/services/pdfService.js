@@ -3,7 +3,7 @@ const path = require('path');
 const fs   = require('fs');
 const { generateQRBuffer } = require('./qrService');
 
-const PURPLE = '#3B1F8C';
+const PURPLE = '#860063';
 const ORANGE = '#F97316';
 const LIGHT_GRAY = '#F3F4F6';
 const DARK_GRAY = '#374151';
@@ -144,7 +144,7 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
       const colWidth = (pageWidth - 20) / 2;
 
       const drawSignatureBox = (label, xPos) => {
-        doc.rect(xPos, y, colWidth, 70).stroke('#D1D5DB').lineWidth(0.5);
+        doc.rect(xPos, y, colWidth, 63).stroke('#D1D5DB').lineWidth(0.5);
         doc.moveTo(xPos + 15, y + 50).lineTo(xPos + colWidth - 15, y + 50)
           .lineWidth(0.5).stroke(PURPLE);
         doc.fontSize(7).fillColor(MED_GRAY).font('Helvetica')
@@ -155,7 +155,7 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
       drawSignatureBox('FIRMA Y SELLO - TESORERÍA', 60 + colWidth + 20);
 
       // ── FOOTER ─────────────────────────────────────────────────────────
-      const footerY = doc.page.height - 55;
+      const footerY = doc.page.height - 77;
       doc.rect(60, footerY, pageWidth, 1).fill('#E5E7EB');
       doc.fontSize(7).fillColor(MED_GRAY).font('Helvetica')
         .text(
