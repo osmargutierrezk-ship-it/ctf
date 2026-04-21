@@ -144,7 +144,7 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
       const colWidth = (pageWidth - 20) / 2;
 
       const drawSignatureBox = (label, xPos) => {
-        doc.rect(xPos, y, colWidth, 63).stroke('#D1D5DB').lineWidth(0.5);
+        doc.rect(xPos, y, colWidth, 66).stroke('#D1D5DB').lineWidth(0.5);
         doc.moveTo(xPos + 15, y + 50).lineTo(xPos + colWidth - 15, y + 50)
           .lineWidth(0.5).stroke(PURPLE);
         doc.fontSize(7).fillColor(MED_GRAY).font('Helvetica')
@@ -155,7 +155,7 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
       drawSignatureBox('FIRMA Y SELLO - TESORERÍA', 60 + colWidth + 20);
 
       // ── FOOTER ─────────────────────────────────────────────────────────
-      const footerY = doc.page.height - 77;
+      const footerY = doc.page.height - 80;
       doc.rect(60, footerY, pageWidth, 1).fill('#E5E7EB');
       doc.fontSize(7).fillColor(MED_GRAY).font('Helvetica')
         .text(
