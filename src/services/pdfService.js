@@ -1,5 +1,6 @@
 const PDFDocument = require('pdfkit');
 const { generateQRBuffer } = require('./qrService');
+const path = require('path');
 
 const PURPLE = '#3B1F8C';
 const ORANGE = '#F97316';
@@ -38,11 +39,14 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
       // ── HEADER ─────────────────────────────────────────────────────────
       doc.rect(60, 50, pageWidth, 90).fill(PURPLE);
 
-      // Logo placeholder
-      doc.rect(75, 62, 65, 65).fill('white').fillOpacity(0.15);
-      doc.fontSize(9).fillColor('white').fillOpacity(0.6)
-        .text('LOGO', 87, 88, { width: 40, align: 'center' });
-      doc.fillOpacity(1);
+      // Logo real
+      const logoPath = path.join(__dirname, '../../public/assets/logo.png');
+      if (require('fs').existsSync(logoPath)) {
+        doc.image(logoPath, 72, 60, { width: 68, height: 68, fit: [68, 68] });
+      } else {
+        doc.rect(75, 62, 65, 65).fill('white').fillOpacity(0.15);
+        doc.fillOpacity(1);
+      }
 
       doc.fontSize(26).fillColor('white').font('Helvetica-Bold')
         .text('CTF', 155, 65);
