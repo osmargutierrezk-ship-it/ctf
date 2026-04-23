@@ -151,9 +151,6 @@ const generateSolicitudPDF = async (solicitud, appBaseUrl) => {
           .text(label, xPos, y + 54, { width: colWidth, align: 'center' });
       };
 
-      drawSignatureBox('FIRMA Y SELLO - CONTADOR', 60);
-      drawSignatureBox('FIRMA Y SELLO - TESORERÍA', 60 + colWidth + 20);
-
       // ── FOOTER ─────────────────────────────────────────────────────────
       const footerY = doc.page.height - 80;
       doc.rect(60, footerY, pageWidth, 1).fill('#E5E7EB');
